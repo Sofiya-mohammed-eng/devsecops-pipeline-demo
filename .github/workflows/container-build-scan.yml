@@ -1,0 +1,47 @@
+name: Container Build & Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-scan:
+    name: Build & Scan Container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t devsecops-pipeline-demo:${{ github.sha }} .
+
+      - name: Run Trivy image scan (report only)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'devsecops-pipeline-demo:${{ github.sha }}'
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'
+
+      - name: Run Trivy image scan (fail on critical)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'devsecops-pipeline-demo:${{ github.sha }}'
+          format: 'table'
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: Generate SBOM with Syft
+        uses: anchore/sbom-action@v0
+        with:
+          image: 'devsecops-pipeline-demo:${{ github.sha }}'
+          format: 'spdx-json'
+          output-file: 'sbom.spdx.json'
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
